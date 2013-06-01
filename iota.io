@@ -256,7 +256,7 @@ Iota Exception := Object clone do(
   // Constructs a new exception.
   //
   // :: @Exception<A, B> => string, Position, C, D -> Exception<C, D>
-  with := method(reason, wanted, got, state,
+  with := method(reason, state, wanted, got,
     new := self clone
     new errorMessage = reason
     new position     = state
@@ -271,11 +271,17 @@ Iota Exception := Object clone do(
   //
   // :: @Exception<A, B> => () -> string
   asString := method(
-    """Exception: #{errorMessage}
-    #{if(expected isNil, ""
-      ,  "Expected " .. expected .. ", got " .. actual) }
-    #{position}
+    expectation := if(expected isNil,
+                      ""
+                   ,
+                      "Expected " .. expected .. ", got " .. actual
+                   )
     """
+Exception: #{errorMessage}
+#{expectation}
+
+#{position}
+    """ interpolate
   )
 )
 
