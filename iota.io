@@ -162,7 +162,6 @@ Iota Position := Object clone do(
     start := 0 max(line - depth)
     end   := lines size min(line + depth)
 
-    "#{start} : #{end}" interpolate println
     lines slice(start, end)
   )
 
