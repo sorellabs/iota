@@ -49,12 +49,35 @@ Iota State := Object clone do(
   //
   // :: @Iota/State => Number, Number -> Iota/State
   with := method(newInput, newIndex,
-    result := clone
+    result := self clone
     result input  = newInput
     result index  = newIndex
     result length = newInput size - newIndex
     result
   )
+
+  // ### consume(size)
+  //
+  // Advances size, returns the matched string.
+  //
+  // :: @Iota/State => Number -> Maybe String
+  consume := method(size,
+    if(size <= length,
+      slice(0, size)
+    ,
+      nil
+    )
+  )
+
+  // ### skip(size)
+  //
+  // Skips the amount of characters.
+  //
+  // :: @Iota/State => Number -> State
+  skip := method(size,
+    self with(input, index + size)
+  )
+
 
   // ### slice(start[, end])
   //
@@ -96,6 +119,22 @@ Iota Result := Object clone do(
     isKindOf(Match)
   )
 
+  isEmpty := method(
+    state == nil
+  )
+
+  union := method(result,
+    self chain(block(previous,
+      result chain(block(new,
+        self with(state, list(previous, new))
+      ))
+    ))
+  )
+
+  replace := method(value,
+    self with(state, value)
+  )
+
   // ### {} Error<A, B>
   Error := clone do(
     // #### with(state, message)
@@ -104,10 +143,14 @@ Iota Result := Object clone do(
     //
     // :: @Iota/Result/Error => A, B -> Error<A, B>
     with := method(state, exception,
-      result := clone
-      result state = state
+      result       := self clone
+      result state  = state
       result error := exception
       result
+    )
+
+    chain := method(f,
+      f call(error)
     )
   )
 
@@ -119,10 +162,14 @@ Iota Result := Object clone do(
     //
     // :: @Iota/Result/Match => A, B -> Match<A, B>
     with := method(state, ast,
-      result      := clone
+      result      := self clone
       result state = state
       result ast  := ast
       result
+    )
+
+    chain := method(f,
+      f call(ast)
     )
   )
 )
@@ -132,5 +179,78 @@ Iota Result := Object clone do(
 // The base parser for all other stuff.
 
 Iota Parser := Object clone do(
+  state  := nil
+  result := nil
 
+  with := method(state, result,
+    new       := self clone
+    new state  = state
+    new result = result
+    new
+  )
+
+  fail := method(errorMessage,
+    with(state, Iota Result Error with(state, errorMessage))
+  )
+
+  match := method(result, newState,
+    with(newState, Iota Result Match with(state, result))
+  )
+
+  failed := method(
+    result isKindOf(Iota Result Error)
+  )
+
+  parse := method(text,
+    with(Iota State with(text, 0), nil)
+  )
+
+  map := method(consequent, alternate,
+    if(result isNil,
+      self
+    ,
+      if(self failed,
+        self with(state, alternate call(result))
+      ,
+        self with(state, consequent call(result))
+      )
+    )
+  )
+
+  | := method(/* parser, */
+    if(failed,
+      call argAt(0) doInContext(self)
+    ,
+      self
+    )
+  )
+
+  + := method(/* parser, */
+    if(failed,
+      self
+    ,
+      previous := result
+      call argAt(0) doInContext(self) map(block(new, previous union(new))
+                                         ,identity)
+    )
+  )
+
+  flatten := method(
+    map(block(xs,
+      xs chain(block(value,
+        xs replace(value flatten)
+      ))
+    ), identity)
+  )
+
+  identity := block(a, a)
+
+  char := method(c,
+    r := state consume(1)
+    if(r != c,
+      fail("Expected #{c}, got #{r}" interpolate)
+    ,
+      match(r, state skip(1))
+    )
+  )
 )
