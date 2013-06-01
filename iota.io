@@ -186,3 +186,95 @@ Iota Position := Object clone do(
     )
   )
 )
+
+// ## {} Result<A>
+//
+// Represents the result of applying a parser to a state.
+Iota Result := Object clone do(
+  value := nil
+
+  // ### isError
+  //
+  // True if the Result represents a failure.
+  //
+  // :: boolean
+  isError := false
+
+  // ### with(value)
+  //
+  // Puts something into the monad.
+  //
+  // :: @Result<A> => B -> Result<B>
+  with := method(newValue,
+    new := self clone
+    new value = newValue
+    new
+  )
+
+  // ### chain(f)
+  //
+  // Monadic bind.
+  //
+  // :: @Result<A> => (A -> Result<B>) -> Result<B>
+  chain := method(f,
+    f call(value)
+  )
+
+  // ### map(f)
+  //
+  // Transforms the value in the functor.
+  //
+  // :: @Result<A> => (A -> B) -> Result<B>
+  map := method(f,
+    with(f call(value))
+  )
+)
+
+// ## Result<A> <| Error<A>
+//
+// Represents a failure in parsing something.
+Iota Error := Iota Result clone do(
+  // ### isError
+  //
+  // True if the Result represents a failure.
+  //
+  // :: boolean
+  isError := true
+)
+
+// ## Exception<A, B>
+//
+// Provides detailed information about the failure in parsing something.
+Iota Exception := Object clone do(
+  errorMessage := nil
+  expected     := nil
+  actual       := nil
+  position     := nil
+
+  // ### with(reason, position, expected, actual)
+  //
+  // Constructs a new exception.
+  //
+  // :: @Exception<A, B> => string, Position, C, D -> Exception<C, D>
+  with := method(reason, wanted, got, state,
+    new := self clone
+    new errorMessage = reason
+    new position     = state
+    new expected     = wanted
+    new actual       = got
+    new
+  )
+
+  // ### asString()
+  //
+  // Provides a textual representation of the exception.
+  //
+  // :: @Exception<A, B> => () -> string
+  asString := method(
+    """Exception: #{errorMessage}
+    #{if(expected isNil, ""
+      ,  "Expected " .. expected .. ", got " .. actual) }
+    #{position}
+    """
+  )
+)
