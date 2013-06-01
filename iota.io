@@ -84,7 +84,7 @@ Iota State := Object clone do(
 //
 // Represents the result of parsing something.
 //
-// :: Match State AST | Error State String
+// :: Match<State, AST> | Error<State, String>
 Iota Result := Object clone do(
   state := nil
 
@@ -96,13 +96,13 @@ Iota Result := Object clone do(
     isKindOf(Match)
   )
 
-  // ### {} Error
+  // ### {} Error<A, B>
   Error := clone do(
     // #### with(state, message)
     //
     // Returns a parsing error.
     //
-    // :: @Iota/Result/Error => State, String -> Error<State, String>
+    // :: @Iota/Result/Error => A, B -> Error<A, B>
     with := method(state, exception,
       result := clone
       result state = state
@@ -111,14 +111,14 @@ Iota Result := Object clone do(
     )
   )
 
-  // ### {} Match AST
+  // ### {} Match<A, B>
   Match := clone do(
     // #### with(state, ast)
     //
     // Puts a value inside the Match container.
     //
-    // :: @Iota/Result/Match => AST -> Match AST
-    with := method(ast,
+    // :: @Iota/Result/Match => A, B -> Match<A, B>
+    with := method(state, ast,
       result      := clone
       result state = state
       result ast  := ast
