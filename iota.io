@@ -91,7 +91,17 @@ Iota State := Object clone do(
   //
   // :: @State<A> => number -> State<A>
   skip := method(count,
-    self with(input, index + size)
+    self with(input, index + count)
+  )
+
+  // ### chain(f)
+  //
+  // Consumes the next thing in the input and feeds the value
+  // and the new state into the block.
+  //
+  // :: @State<A> => (A, State<B> -> State<B>) -> State<B>
+  chain := method(f,
+    f call(self consume(1), self skip(1))
   )
 
   // ### position()
@@ -241,26 +251,22 @@ Iota Error := Iota Result clone do(
   isError := true
 )
 
-// ## Exception<A, B>
+// ## Exception
 //
 // Provides detailed information about the failure in parsing something.
 Iota Exception := Object clone do(
   errorMessage := nil
-  expected     := nil
-  actual       := nil
   position     := nil
 
-  // ### with(reason, position, expected, actual)
+  // ### with(reason, position)
   //
   // Constructs a new exception.
   //
-  // :: @Exception<A, B> => string, Position, C, D -> Exception<C, D>
-  with := method(reason, state, wanted, got,
+  // :: @Exception => string, Position -> Exception
+  with := method(reason, state,
     new := self clone
     new errorMessage = reason
     new position     = state
-    new expected     = wanted
-    new actual       = got
     new
   )
 
@@ -268,19 +274,9 @@ Iota Exception := Object clone do(
   //
   // Provides a textual representation of the exception.
   //
-  // :: @Exception<A, B> => () -> string
+  // :: @Exception => () -> string
   asString := method(
-    expectation := if(expected isNil,
-                      ""
-                   ,
-                      "Expected " .. expected .. ", got " .. actual
-                   )
-    """
-Exception: #{errorMessage}
-#{expectation}
-
-#{position}
-    """ interpolate
+    "Parser Exception: #{errorMessage}\n#{position}" interpolate
   )
 )
 
@@ -303,14 +299,14 @@ Iota Parser := Object clone do(
     new
   )
 
-  // ### fail(message, expected, actual)
+  // ### fail(message)
   //
-  // Indicates failure to parse something.
+  // Indicates general failure to parse something.
   //
-  // :: @Parser<A> => string, B, C -> Parser<A>
-  fail := method(errorMessage, expected, actual,
-    ex := Iota Exception with(errorMessage, state position, expected, actual)
-    with(state, Iota Result with(ex))
+  // :: @Parser<A> => string -> Parser<A>
+  fail := method(errorMessage,
+    ex := Iota Exception with(errorMessage, state position)
+    with(state, Iota Error with(ex))
   )
 
   // ### match(value)
@@ -322,6 +318,29 @@ Iota Parser := Object clone do(
     with(newState, Iota Result with(value))
   )
 
+  // ### either(consequent, alternate)
+  //
+  // Calls consequent if the parser is in a consistent state, alternate
+  // if it's ain an error state.
+  //
+  // :: @Parser<A> => (A -> Parser<B>), (A -> Parser<C>) -> Parser<B> | Parser<C>
+  either := method(consequent, alternate,
+    if(result isError,
+      alternate call(self)
+    ,
+      consequent call(self)
+    )
+  )
+
+  // ### map(f)
+  //
+  // Transforms the value of the parser.
+  //
+  // :: @Parser<A> => (Result<B> -> Result<C>) -> Parser<A>
+  map := method(f,
+    with(state, f call(result))
+  )
+
   // ### for(text)
   //
   // Yields a parser for the given input.
@@ -330,4 +349,99 @@ Iota Parser := Object clone do(
   for := method(text,
     with(Iota State with(text, 0), nil)
   )
+
+  // ### satisfy(f)
+  //
+  // Succeeds if the predicate holds for the next state input.
+  //
+  // :: @Parser<A> => (A, State<B> -> bool) -> Parser<B> | Parser<A>
+  satisfy := method(f,
+    newValue := nil
+    newState := state chain(block(value, stateB,
+                              if(f call(value),
+                                newValue = match(value, stateB)
+                                stateB
+                              ,
+                                newValue = fail("Failed to satisfy #{f message}")
+                                state
+                              )
+                            ))
+    newValue
+  )
+
+  // ### ?(message)
+  //
+  // Maps the error if the parser is in an error state.
+  //
+  // :: @Parser<A> => message -> Parser<A>
+  ? := method(newMessage,
+    either(
+      block(map(block(a, a)))
+    ,
+      block(map(block(a, ex := Iota Exception with(newMessage, state position)
+                         Iota Error with(ex))))
+    )
+  )
 )
+
+// ## {} Combinators
+//
+// Trait for combining parsers.
+Iota Combinators := Object clone do(
+
+
+)
+
+// ## {} CharParser
+//
+// Trait for parsing character-based input.
+Iota CharParser := Object clone do(
+  // ### char(x)
+  //
+  // Succeeds if the input matches the character.
+  //
+  // :: @Parser<A> => B -> Parser<B> | Parser<A>
+  char := method(character,
+    satisfy(block(actual, actual == character)) \
+    ? "Expected \"#{character}\"" interpolate
+  )
+
+  // ### oneOf(xs)
+  //
+  // Succeeds if the input match any of the characters.
+  //
+  // :: @Parser<A> => B -> Parser<B> | Parser<A>
+  oneOf := method(characters,
+    satisfy(block(actual, characters containsSeq(actual))) \
+    ? "Expected one of \"#{characters}\"" interpolate
+  )
+
+  // ### noneOf(xs)
+  //
+  // Succeeds if the input match none of the characters.
+  //
+  // :: @Parser<A> => B -> Parser<B> | Parser<A>
+  noneOf := method(characters,
+    satisfy(block(actual, characters containsSeq(actual) not)) \
+    ? "Expected none of \"#{characters}\"" interpolate
+  )
+
+  // ### string(xs)
+  //
+  // Succeeds if the input matches the sequence of characters.
+  //
+  // :: @Parser<A> => B -> Parser<B> | Parser<A>
+  string := method(text,
+    actual := state consume(text size)
+    if(actual == text,
+      match(actual, state skip(text size))
+    ,
+      fail("Expected \"#{text}\"" interpolate)
+    )
+  )
+)
+
+Iota setProtos(list(
+  Iota Parser,
+  Iota CharParser
+))
