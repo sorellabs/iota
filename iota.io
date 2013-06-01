@@ -27,15 +27,9 @@
 
 Iota := Object clone
 
-// ## {} State
+// ## {} State<A>
 //
-// Represents each state a parser's input can be in.
-//
-// :: { input  : String
-//    , index  : Number
-//    , length : Number
-//    , cache  : { Parser -> Result }
-//    }
+// Represents the state of parsing an input.
 Iota State := Object clone do(
   input  := ""
   index  := 0
@@ -44,213 +38,151 @@ Iota State := Object clone do(
 
   // ### with(input, index)
   //
-  // Constructs a new parser state for the given input, starting at the
-  // `index`.
+  // Constructs a new state for the parser.
   //
-  // :: @Iota/State => Number, Number -> Iota/State
+  // :: @State<A> => [B], number -> State<B>
   with := method(newInput, newIndex,
-    result := self clone
-    result input  = newInput
-    result index  = newIndex
-    result length = newInput size - newIndex
-    result
-  )
-
-  // ### consume(size)
-  //
-  // Advances size, returns the matched string.
-  //
-  // :: @Iota/State => Number -> Maybe String
-  consume := method(size,
-    if(size <= length,
-      slice(0, size)
-    ,
-      nil
-    )
-  )
-
-  // ### skip(size)
-  //
-  // Skips the amount of characters.
-  //
-  // :: @Iota/State => Number -> State
-  skip := method(size,
-    self with(input, index + size)
-  )
-
-
-  // ### slice(start[, end])
-  //
-  // Returns the text in the parser state's input between [start, end)
-  //
-  // :: @Iota/State => Number -> String
-  // :: @Iota/State => Number, Number -> String
-  slice := method(startIndex, endIndex,
-    if(call argCount == 2,
-      input exclusiveSlice(index + startIndex, index + endIndex)
-    ,
-      input inclusiveSlice(index + startIndex)
-    )
+    new := self clone
+    new input  = newInput
+    new index  = newIndex
+    new length = newInput size - newIndex
+    new
   )
 
   // ### asString()
   //
-  // Returns a textual representation of the parser's state.
+  // Returns a textual representation of the parser state.
   //
-  // :: @Iota/State => () -> String
+  // :: () -> string
   asString := method(
     "Iota State(#{slice(0)})" interpolate
   )
-)
 
-// ## {} Result
-//
-// Represents the result of parsing something.
-//
-// :: Match<State, AST> | Error<State, String>
-Iota Result := Object clone do(
-  state := nil
-
-  isError := method(
-    isKindOf(Error)
-  )
-
-  isSuccess := method(
-    isKindOf(Match)
-  )
-
-  isEmpty := method(
-    state == nil
-  )
-
-  union := method(result,
-    self chain(block(previous,
-      result chain(block(new,
-        self with(state, list(previous, new))
-      ))
-    ))
-  )
-
-  replace := method(value,
-    self with(state, value)
-  )
-
-  // ### {} Error<A, B>
-  Error := clone do(
-    // #### with(state, message)
-    //
-    // Returns a parsing error.
-    //
-    // :: @Iota/Result/Error => A, B -> Error<A, B>
-    with := method(state, exception,
-      result       := self clone
-      result state  = state
-      result error := exception
-      result
-    )
-
-    chain := method(f,
-      f call(error)
+  // ### slice(from[, to])
+  //
+  // Returns part of the input.
+  //
+  // :: @State<A> => number, number -> [A]
+  // :: @State<A> => number -> [A]
+  slice := method(from, to,
+    if(call argCount == 2,
+      input exclusiveSlice(from + index, to + index)
+    ,
+      input inclusiveSlice(from + index)
     )
   )
 
-  // ### {} Match<A, B>
-  Match := clone do(
-    // #### with(state, ast)
-    //
-    // Puts a value inside the Match container.
-    //
-    // :: @Iota/Result/Match => A, B -> Match<A, B>
-    with := method(state, ast,
-      result      := self clone
-      result state = state
-      result ast  := ast
-      result
+  // ### consume(size)
+  //
+  // Consumes the given size, returns nil if it can't.
+  //
+  // :: @State<A> => number -> [A]
+  consume := method(size,
+    if(size > length,
+      nil
+    ,
+      slice(0, size)
     )
+  )
 
-    chain := method(f,
-      f call(ast)
-    )
+  // ### skip(count)
+  //
+  // Skips the amount of characters specified, returns a new state.
+  //
+  // :: @State<A> => number -> State<A>
+  skip := method(count,
+    self with(input, index + size)
+  )
+
+  // ### position()
+  //
+  // Returns the position of the parser.
+  //
+  // :: @State<A> => () -> Position
+  position := method(
+    Iota Position with(input, index)
   )
 )
 
-// ## {} Parser
+// ## {} Position
 //
-// The base parser for all other stuff.
+// Represents the position of a parser on an input.
+Iota Position := Object clone do(
+  input := ""
+  index := 0
 
-Iota Parser := Object clone do(
-  state  := nil
-  result := nil
-
-  with := method(state, result,
-    new       := self clone
-    new state  = state
-    new result = result
+  // ### with(input, index)
+  //
+  // Constructs a new Position.
+  //
+  // :: @Position => string, number -> Position
+  with := method(input, index,
+    new := self clone
+    new input = input
+    new index = index
     new
   )
 
-  fail := method(errorMessage,
-    with(state, Iota Result Error with(state, errorMessage))
+  // ### asLines(start, end)
+  //
+  // Returns a list of lines from start to end.
+  //
+  // :: @Position => number, number -> Position
+  asLines := method(start, end,
+    input inclusiveSlice(start, end) \
+          asMutable replaceSeq("\r\n", "\r") \
+          split("\r", "\n")
   )
 
-  match := method(result, newState,
-    with(newState, Iota Result Match with(state, result))
+  // ### line()
+  //
+  // Returns the position's line number.
+  //
+  // :: @Position => () -> number
+  line := method(
+    asLines(0, index) size
   )
 
-  failed := method(
-    result isKindOf(Iota Result Error)
+  // ### column()
+  //
+  // Returns the position's column number.
+  //
+  // :: @Position => () -> column
+  column := method(
+    asLines(0, index) last size
   )
 
-  parse := method(text,
-    with(Iota State with(text, 0), nil)
+  // ### context()
+  //
+  // Returns the context of the position.
+  //
+  // :: @Position => number -> [string]
+  context := method(depth,
+    lines := asLines(0, input size)
+    start := 0 max(line - depth)
+    end   := lines size min(line + depth)
+
+    "#{start} : #{end}" interpolate println
+    lines slice(start, end)
   )
 
-  map := method(consequent, alternate,
-    if(result isNil,
-      self
+  // ### asString()
+  //
+  // Returns a textual representation of the context.
+  //
+  // :: @Position => () -> string
+  asString := method(
+    if(input != "",
+      lines := context(3)
+      end   := line min(3)
+      """
+--- Iota at line #{line}, column #{column} ---
+#{lines slice(0, end) join("\n")}
+#{" " repeated(column - 1)}^
+#{lines slice(end) join("\n")}
+      """ interpolate
     ,
-      if(self failed,
-        self with(state, alternate call(result))
-      ,
-        self with(state, consequent call(result))
-      )
-    )
-  )
-
-  | := method(/* parser, */
-    if(failed,
-      call argAt(0) doInContext(self)
-    ,
-      self
-    )
-  )
-
-  + := method(/* parser, */
-    if(failed,
-      self
-    ,
-      previous := result
-      call argAt(0) doInContext(self) map(block(new, previous union(new))
-                                         ,identity)
-    )
-  )
-
-  flatten := method(
-    map(block(xs,
-      xs chain(block(value,
-        xs replace(value flatten)
-      ))
-    ), identity)
-  )
-
-  identity := block(a, a)
-
-  char := method(c,
-    r := state consume(1)
-    if(r != c,
-      fail("Expected #{c}, got #{r}" interpolate)
-    ,
-      match(r, state skip(1))
+      ""
     )
   )
 )
