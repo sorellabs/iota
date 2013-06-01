@@ -278,3 +278,51 @@ Iota Exception := Object clone do(
     """
   )
 )
+
+// ## {} Parser<A>
+//
+// The base parser object.
+Iota Parser := Object clone do(
+  state  := nil
+  result := nil
+
+  // ### with(state, result)
+  //
+  // Constructs a new parser for the given state/result pair
+  //
+  // :: @Parser<A> => State<B>, Result<C> -> Parser<B>
+  with := method(state, result,
+    new := self clone
+    new state  = state
+    new result = result
+    new
+  )
+
+  // ### fail(message, expected, actual)
+  //
+  // Indicates failure to parse something.
+  //
+  // :: @Parser<A> => string, B, C -> Parser<A>
+  fail := method(errorMessage, expected, actual,
+    ex := Iota Exception with(errorMessage, state position, expected, actual)
+    with(state, Iota Result with(ex))
+  )
+
+  // ### match(value)
+  //
+  // Successfully matches the value.
+  //
+  // :: @Parser<A> => Result<B>, State<C> -> Parser<C>
+  match := method(value, newState,
+    with(newState, Iota Result with(value))
+  )
+
+  // ### for(text)
+  //
+  // Yields a parser for the given input.
+  //
+  // :: @Parser<A> => B -> Parser<B>
+  for := method(text,
+    with(Iota State with(text, 0), nil)
+  )
+)
